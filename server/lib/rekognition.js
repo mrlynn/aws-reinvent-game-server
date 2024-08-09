@@ -8,17 +8,22 @@ const rekognitionClient = new RekognitionClient({
   }
 });
 
-async function analyzeDrawing(imageBytes) {
+async function analyzeDrawing(imageBuffer) {
   const params = {
     Image: {
-      Bytes: imageBytes,
+      Bytes: imageBuffer
     },
     MaxLabels: 10,
     MinConfidence: 75,
   };
   const command = new DetectLabelsCommand(params);
-  const rekognitionResponse = await rekognitionClient.send(command);
-  return rekognitionResponse.Labels.map(label => label.Name);
+  try {
+    const rekognitionResponse = await rekognitionClient.send(command);
+    return rekognitionResponse.Labels.map(label => label.Name);
+  } catch (error) {
+    console.error('Error in Rekognition:', error);
+    throw error;
+  }
 }
 
 module.exports = analyzeDrawing;

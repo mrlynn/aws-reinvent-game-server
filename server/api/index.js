@@ -57,13 +57,11 @@ app.post('/api/checkDrawing', async (req, res) => {
             return res.status(400).json({ message: 'No drawing data provided' });
         }
 
-        // Upload the image to Vercel Blob
-        const { url } = await put('drawing.png', drawing, { access: 'public' });
+        // Extract the base64 data from the drawing string
+        const base64Data = drawing.replace(/^data:image\/\w+;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, 'base64');
 
-        // Use the URL to get the image buffer
-        const imageResponse = await axios.get(url, { responseType: 'arraybuffer' });
-        const imageBuffer = Buffer.from(imageResponse.data, 'binary');
-
+        // Analyze the drawing directly without uploading to Vercel Blob
         const labels = await analyzeDrawing(imageBuffer);
         console.log('Rekognition labels:', labels);
 
