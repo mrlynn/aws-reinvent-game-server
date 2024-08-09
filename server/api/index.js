@@ -49,18 +49,19 @@ app.get('/api/getRandomPrompt', async (req, res) => {
 });
 
 app.post('/api/checkDrawing', async (req, res) => {
-    console.log('Received request to /api/checkDrawing');
-    console.log('Request body:', req.body);
     try {
         const { promptId, drawing } = req.body;
 
         if (!drawing) {
-            console.log('No drawing data provided');
             return res.status(400).json({ message: 'No drawing data provided' });
         }
 
-        // Convert base64 to buffer
-        const imageBuffer = Buffer.from(drawing.split(',')[1], 'base64');
+        // Upload the image to Vercel Blob
+        const { url } = await put('drawing.png', drawing, { access: 'public' });
+
+        // Use the URL to get the image buffer
+        const imageResponse = await axios.get(url, { responseType: 'arraybuffer' });
+        const imageBuffer = Buffer.from(imageResponse.data, 'binary');
 
         const labels = await analyzeDrawing(imageBuffer);
         console.log('Rekognition labels:', labels);

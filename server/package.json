@@ -9,14 +9,15 @@
     },
     "dependencies": {
         "@aws-sdk/client-rekognition": "^3.624.0",
+        "@vercel/blob": "^0.23.4",
         "aws-sdk": "^2.1670.0",
+        "axios": "^0.27.2",
         "cors": "^2.8.5",
         "dotenv": "^10.0.0",
         "express": "^4.17.1",
         "mongodb": "^4.1.0",
         "mongoose": "^8.5.2",
         "multer": "^1.4.5-lts.1",
-        "axios": "^0.27.2",
         "node-base64-image": "^2.0.6",
         "openai": "^4.55.1"
     },
