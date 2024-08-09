@@ -1,4 +1,5 @@
 const { RekognitionClient, DetectLabelsCommand } = require('@aws-sdk/client-rekognition');
+const fs = require('fs').promises;
 
 const rekognitionClient = new RekognitionClient({
   region: process.env.AWS_REGION,
@@ -8,7 +9,8 @@ const rekognitionClient = new RekognitionClient({
   }
 });
 
-async function analyzeDrawing(imageBuffer) {
+async function analyzeDrawing(imagePath) {
+  const imageBuffer = await fs.readFile(imagePath);
   const params = {
     Image: {
       Bytes: imageBuffer

@@ -4,7 +4,6 @@ const axios = require('axios');
 const connectToDatabase = require('../lib/database').default;
 const analyzeDrawing = require('../lib/rekognition');
 const cors = require('cors');
-const { put } = require('@vercel/blob');  // Correct import
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -61,9 +60,16 @@ app.post('/api/checkDrawing', async (req, res) => {
         const base64Data = drawing.replace(/^data:image\/\w+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, 'base64');
 
-        // Analyze the drawing directly without uploading to Vercel Blob
-        const labels = await analyzeDrawing(imageBuffer);
+        // Save the image temporarily
+        const tempFilePath = path.join('/tmp', `drawing-${Date.now()}.png`);
+        await fs.writeFile(tempFilePath, imageBuffer);
+
+        // Analyze the drawing
+        const labels = await analyzeDrawing(tempFilePath);
         console.log('Rekognition labels:', labels);
+
+        // Delete the temporary file
+        await fs.unlink(tempFilePath);
 
         const { db } = await connectToDatabase();
         const promptsCollection = db.collection(process.env.COLLECTION_NAME);
