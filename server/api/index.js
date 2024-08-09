@@ -4,6 +4,7 @@ const axios = require('axios');
 const connectToDatabase = require('../lib/database').default;
 const analyzeDrawing = require('../lib/rekognition');
 const cors = require('cors');
+const { put } = require('@vercel/blob');  // Correct import
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
