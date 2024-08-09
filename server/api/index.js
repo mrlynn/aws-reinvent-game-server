@@ -1,7 +1,7 @@
 const express = require('express');
 const { ObjectId } = require('mongodb');
 const axios = require('axios');
-const connectToDatabase = require('../lib/database');
+const connectToDatabase = require('../lib/database').default;
 const analyzeDrawing = require('../lib/rekognition');
 
 const app = express();
