@@ -1,0 +1,25 @@
+{
+    "name": "mongodb-aws-game-collection-server",
+    "version": "1.0.0",
+    "description": "Server for MongoDB/AWS Game Collection",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "nodemon server.js"
+    },
+    "dependencies": {
+        "@aws-sdk/client-rekognition": "^3.624.0",
+        "aws-sdk": "^2.1670.0",
+        "cors": "^2.8.5",
+        "dotenv": "^10.0.0",
+        "express": "^4.17.1",
+        "mongodb": "^4.1.0",
+        "mongoose": "^8.5.2",
+        "multer": "^1.4.5-lts.1",
+        "node-base64-image": "^2.0.6",
+        "openai": "^4.55.1"
+    },
+    "devDependencies": {
+        "nodemon": "^2.0.12"
+    }
+}
