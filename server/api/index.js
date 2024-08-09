@@ -3,10 +3,27 @@ const { ObjectId } = require('mongodb');
 const axios = require('axios');
 const connectToDatabase = require('../lib/database').default;
 const analyzeDrawing = require('../lib/rekognition');
+const cors = require('cors');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-
+const allowedOrigins = [
+    'https://main.d1fueswraai8k7.amplifyapp.com',
+    'http://localhost:3000', // For local development
+    // Add any other origins you need
+  ];
+  
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
 app.get('/api/getRandomPrompt', async (req, res) => {
   try {
     const { db } = await connectToDatabase();
