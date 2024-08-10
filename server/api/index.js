@@ -278,7 +278,9 @@ app.post('/api/checkDrawing', async (req, res) => {
             similarity: similarity,
             explanation: explanation,
             promptText: prompt.description,
-            promptName: prompt.name
+            promptName: prompt.name,
+            detectedLabels: labels,
+            vectorSearchResults: searchResults
         };
 
         console.log('Sending response:', response);
