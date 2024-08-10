@@ -21,12 +21,12 @@ const activeUsers = new Map();
 
 // Function declarations
 function cleanupInactiveUsers() {
-  const now = Date.now();
-  for (const [userId, lastActive] of activeUsers) {
-    if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
-      activeUsers.delete(userId);
+    const now = Date.now();
+    for (const [userId, lastActive] of activeUsers) {
+        if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
+            activeUsers.delete(userId);
+        }
     }
-  }
 }
 
 // Middleware to update user activity
@@ -34,7 +34,7 @@ function updateUserActivity(req, res, next) {
     const userId = req.headers['user-id'] || req.ip; // Use a user ID if provided, otherwise use IP
     activeUsers.set(userId, Date.now());
     next();
-  }
+}
 
 const allowedOrigins = [
     'https://main.d1fueswraai8k7.amplifyapp.com',
@@ -227,11 +227,22 @@ app.post('/api/checkDrawing', async (req, res) => {
 
         // Calculate cosine similarity between label embedding and prompt name embedding
         const similarity = cosineSimilarity(labelEmbedding, prompt.nameEmbedding);
-        const score = Math.round(similarity * 100);
+        const adjustedSimilarity = (similarity + 1) / 2;
 
+        // Calculate a threshold based on detected labels
+        const promptKeywords = prompt.name.toLowerCase().split(' ');
+        const matchingLabels = labels.filter(label =>
+            promptKeywords.some(keyword => label.toLowerCase().includes(keyword))
+        );
+        const labelMatchScore = (matchingLabels.length / promptKeywords.length) * 100;
+
+        // Combine similarity score with label match score (max 100 points)
+        const finalScore = Math.min(Math.round((adjustedSimilarity * 50) + (labelMatchScore / 2)), 100);
         const response = {
-            score: score,
+            score: finalScore,
             similarity: similarity,
+            adjustedSimilarity: adjustedSimilarity,
+            labelMatchScore: labelMatchScore,
             explanation: `Drawing labels: ${labels.join(', ')}`,
             promptText: prompt.description,
             promptName: prompt.name,
@@ -266,54 +277,54 @@ function cosineSimilarity(vecA, vecB) {
 // Save score endpoint
 app.post('/api/saveScore', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const leaderboard = db.collection('leaderboard');
-  
-      const { playerName, game, score, maxScore } = req.body;
-  
-      console.log('Received score data:', { playerName, game, score, maxScore });
-  
-      // Validate input
-      if (!playerName || typeof playerName !== 'string') {
-        return res.status(400).json({ error: 'Invalid playerName' });
-      }
-      if (!game || typeof game !== 'string') {
-        return res.status(400).json({ error: 'Invalid game' });
-      }
-      if (typeof score !== 'number' || isNaN(score)) {
-        return res.status(400).json({ error: 'Invalid score' });
-      }
-      if (typeof maxScore !== 'number' || isNaN(maxScore)) {
-        return res.status(400).json({ error: 'Invalid maxScore' });
-      }
-  
-      // Check for profanity
-      const filter = new Filter();
-      if (filter.isProfane(playerName)) {
-        return res.status(400).json({ error: 'Inappropriate player name' });
-      }
-  
-      // Update the leaderboard
-      const result = await leaderboard.updateOne(
-        { playerName, game },
-        { 
-          $set: { 
-            playerName, 
-            game, 
-            maxScore,
-            lastUpdated: new Date()
-          },
-          $max: { highScore: score } // Only update if the new score is higher
-        },
-        { upsert: true } // Create a new document if it doesn't exist
-      );
-  
-      res.status(200).json({ message: 'Score saved successfully', result });
+        const { db } = await connectToDatabase();
+        const leaderboard = db.collection('leaderboard');
+
+        const { playerName, game, score, maxScore } = req.body;
+
+        console.log('Received score data:', { playerName, game, score, maxScore });
+
+        // Validate input
+        if (!playerName || typeof playerName !== 'string') {
+            return res.status(400).json({ error: 'Invalid playerName' });
+        }
+        if (!game || typeof game !== 'string') {
+            return res.status(400).json({ error: 'Invalid game' });
+        }
+        if (typeof score !== 'number' || isNaN(score)) {
+            return res.status(400).json({ error: 'Invalid score' });
+        }
+        if (typeof maxScore !== 'number' || isNaN(maxScore)) {
+            return res.status(400).json({ error: 'Invalid maxScore' });
+        }
+
+        // Check for profanity
+        const filter = new Filter();
+        if (filter.isProfane(playerName)) {
+            return res.status(400).json({ error: 'Inappropriate player name' });
+        }
+
+        // Update the leaderboard
+        const result = await leaderboard.updateOne(
+            { playerName, game },
+            {
+                $set: {
+                    playerName,
+                    game,
+                    maxScore,
+                    lastUpdated: new Date()
+                },
+                $max: { highScore: score } // Only update if the new score is higher
+            },
+            { upsert: true } // Create a new document if it doesn't exist
+        );
+
+        res.status(200).json({ message: 'Score saved successfully', result });
     } catch (error) {
-      console.error('Error saving score:', error);
-      res.status(500).json({ error: 'Internal server error', details: error.message });
+        console.error('Error saving score:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
-  });
+});
 
 // Get leaderboard for a specific game
 app.get('/api/leaderboard/:gameId', async (req, res) => {
