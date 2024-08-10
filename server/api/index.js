@@ -127,8 +127,9 @@ app.post('/api/checkDrawing', async (req, res) => {
         await fs.writeFile(tempFilePath, imageBuffer);
 
         // Analyze the drawing
-        const labels = await analyzeDrawing(tempFilePath);
+        const analysisResult = await analyzeDrawing(tempFilePath);
         console.log('Rekognition analysis result:', analysisResult);
+
 
         // Delete the temporary file
         await fs.unlink(tempFilePath);
@@ -137,6 +138,9 @@ app.post('/api/checkDrawing', async (req, res) => {
             return res.status(400).json({ message: 'The drawing contains inappropriate content and cannot be submitted.' });
         }
 
+        const labels = analysisResult.labels || [];
+        console.log('Rekognition labels:', labels);
+        
         const { db } = await connectToDatabase();
         const promptsCollection = db.collection(process.env.COLLECTION_NAME);
 
