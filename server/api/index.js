@@ -201,6 +201,67 @@ function cosineSimilarity(vecA, vecB) {
     return dotProduct / (magnitudeA * magnitudeB);
 }
 
+router.post('/saveScore', async (req, res) => {
+    try {
+      await client.connect();
+      const database = client.db("gameDatabaseName"); // Replace with your actual database name
+      const leaderboard = database.collection("leaderboard");
+  
+      const { playerName, game, score, maxScore } = req.body;
+  
+      // Validate input
+      if (!playerName || !game || typeof score !== 'number' || typeof maxScore !== 'number') {
+        return res.status(400).json({ error: 'Invalid input' });
+      }
+  
+      // Update the leaderboard
+      const result = await leaderboard.updateOne(
+        { playerName, game },
+        { 
+          $set: { 
+            playerName, 
+            game, 
+            maxScore,
+            lastUpdated: new Date()
+          },
+          $max: { highScore: score } // Only update if the new score is higher
+        },
+        { upsert: true } // Create a new document if it doesn't exist
+      );
+  
+      res.json({ message: 'Score saved successfully', result });
+    } catch (error) {
+      console.error('Error saving score:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    } finally {
+      await client.close();
+    }
+  });
+
+// Endpoint to get leaderboard for a specific game
+router.get('/leaderboard/:gameId', async (req, res) => {
+    try {
+      await client.connect();
+      const database = client.db("gameDatabaseName"); // Replace with your actual database name
+      const leaderboard = database.collection("leaderboard");
+  
+      const { gameId } = req.params;
+  
+      const topScores = await leaderboard
+        .find({ game: gameId })
+        .sort({ highScore: -1 })
+        .limit(10)
+        .toArray();
+  
+      res.json(topScores);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    } finally {
+      await client.close();
+    }
+  });
+
 // Save game result
 app.post('/api/saveGameResult', async (req, res) => {
     try {
