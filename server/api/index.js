@@ -231,7 +231,7 @@ app.post('/api/saveGameResult', async (req, res) => {
     }
   });
   
-  // Get leaderboard
+  // Get leaderboard and implement multiple game leaderboard stats
   app.get('/api/leaderboard', async (req, res) => {
     try {
       const { db } = await connectToDatabase();
