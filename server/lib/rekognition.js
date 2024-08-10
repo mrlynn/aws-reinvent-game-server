@@ -1,4 +1,4 @@
-const { RekognitionClient, DetectLabelsCommand } = require('@aws-sdk/client-rekognition');
+const { RekognitionClient, DetectLabelsCommand, DetectModerationLabelsCommand } = require('@aws-sdk/client-rekognition');
 const fs = require('fs').promises;
 
 const rekognitionClient = new RekognitionClient({
@@ -9,8 +9,7 @@ const rekognitionClient = new RekognitionClient({
   }
 });
 
-async function analyzeDrawing(imagePath) {
-  const imageBuffer = await fs.readFile(imagePath);
+async function detectLabels(imageBuffer) {
   const params = {
     Image: {
       Bytes: imageBuffer
@@ -23,9 +22,44 @@ async function analyzeDrawing(imagePath) {
     const rekognitionResponse = await rekognitionClient.send(command);
     return rekognitionResponse.Labels.map(label => label.Name);
   } catch (error) {
-    console.error('Error in Rekognition:', error);
+    console.error('Error in Rekognition label detection:', error);
     throw error;
   }
+}
+
+async function moderateContent(imageBuffer) {
+  const params = {
+    Image: {
+      Bytes: imageBuffer
+    },
+    MinConfidence: 60
+  };
+  const command = new DetectModerationLabelsCommand(params);
+  try {
+    const moderationResponse = await rekognitionClient.send(command);
+    return moderationResponse.ModerationLabels;
+  } catch (error) {
+    console.error('Error in Rekognition content moderation:', error);
+    throw error;
+  }
+}
+
+async function analyzeDrawing(imagePath) {
+  const imageBuffer = await fs.readFile(imagePath);
+  
+  // Perform content moderation
+  const moderationLabels = await moderateContent(imageBuffer);
+  if (moderationLabels.length > 0) {
+    throw new Error('Inappropriate content detected');
+  }
+
+  // If content is appropriate, detect labels
+  const labels = await detectLabels(imageBuffer);
+  
+  return {
+    labels: labels,
+    isAppropriate: true
+  };
 }
 
 module.exports = analyzeDrawing;

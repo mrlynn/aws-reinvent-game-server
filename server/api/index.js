@@ -108,23 +108,6 @@ app.post('/api/checkDrawing', async (req, res) => {
         const labels = await analyzeDrawing(tempFilePath);
         console.log('Rekognition labels:', labels);
 
-        // Content moderation check
-        const moderationParams = {
-            Image: {
-                Bytes: imageBuffer
-            },
-            MinConfidence: 60
-        };
-
-        const moderationResult = await rekognition.detectModerationLabels(moderationParams).promise();
-
-        if (moderationResult.ModerationLabels.length > 0) {
-            return res.status(400).json({
-                message: 'The drawing contains inappropriate content and cannot be submitted.',
-                moderationLabels: moderationResult.ModerationLabels
-            });
-        }
-
         // Delete the temporary file
         await fs.unlink(tempFilePath);
 
