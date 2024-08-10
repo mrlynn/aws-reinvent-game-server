@@ -4,8 +4,10 @@ const axios = require('axios');
 const connectToDatabase = require('../lib/database').default;
 const analyzeDrawing = require('../lib/rekognition');
 const cors = require('cors');
-const path = require('path');  
+const path = require('path');
 const fs = require('fs').promises;
+const Filter = require('bad-words');
+const filter = new Filter();
 
 
 const app = express();
@@ -23,13 +25,13 @@ const activeUsers = new Map();
 const cleanupInactiveUsers = () => {
     const now = Date.now();
     for (const [userId, lastActive] of activeUsers) {
-      if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
-        activeUsers.delete(userId);
-      }
+        if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
+            activeUsers.delete(userId);
+        }
     }
-  };
+};
 
-  // Run cleanup every minute
+// Run cleanup every minute
 setInterval(cleanupInactiveUsers, 60 * 1000);
 
 // Middleware to update user activity
@@ -37,7 +39,7 @@ app.use((req, res, next) => {
     const userId = req.headers['user-id'] || req.ip; // Use a user ID if provided, otherwise use IP
     activeUsers.set(userId, Date.now());
     next();
-  });
+});
 
 
 
@@ -57,7 +59,7 @@ app.use(cors({
 app.get('/api/activeUsers', (req, res) => {
     cleanupInactiveUsers(); // Run a cleanup before returning the count
     res.json({ activeUsers: activeUsers.size });
-  });
+});
 
 app.get('/api/getRandomPrompt', async (req, res) => {
     try {
@@ -113,11 +115,11 @@ app.post('/api/checkDrawing', async (req, res) => {
             },
             MinConfidence: 60
         };
-        
+
         const moderationResult = await rekognition.detectModerationLabels(moderationParams).promise();
-        
+
         if (moderationResult.ModerationLabels.length > 0) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 message: 'The drawing contains inappropriate content and cannot be submitted.',
                 moderationLabels: moderationResult.ModerationLabels
             });
@@ -212,7 +214,7 @@ app.post('/api/checkDrawing', async (req, res) => {
 
         // Calculate cosine similarity between label embedding and prompt name embedding
         const similarity = cosineSimilarity(labelEmbedding, prompt.nameEmbedding);
-        const score = Math.round(similarity * 100);        
+        const score = Math.round(similarity * 100);
 
         const response = {
             score: score,
@@ -251,132 +253,137 @@ function cosineSimilarity(vecA, vecB) {
 // Save score endpoint
 app.post('/api/saveScore', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const leaderboard = db.collection('leaderboard');
-  
-      const { playerName, game, score, maxScore } = req.body;
-  
-      // Validate input
-      if (!playerName || !game || typeof score !== 'number' || typeof maxScore !== 'number') {
-        return res.status(400).json({ error: 'Invalid input' });
-      }
-  
-      // Update the leaderboard
-      const result = await leaderboard.updateOne(
-        { playerName, game },
-        { 
-          $set: { 
-            playerName, 
-            game, 
-            maxScore,
-            lastUpdated: new Date()
-          },
-          $max: { highScore: score } // Only update if the new score is higher
-        },
-        { upsert: true } // Create a new document if it doesn't exist
-      );
-  
-      res.json({ message: 'Score saved successfully', result });
+        const { db } = await connectToDatabase();
+        const leaderboard = db.collection('leaderboard');
+
+        const { playerName, game, score, maxScore } = req.body;
+
+        // Validate input
+        if (!playerName || !game || typeof score !== 'number' || typeof maxScore !== 'number') {
+            return res.status(400).json({ error: 'Invalid input' });
+        }
+
+        // Check for profanity in player name
+        if (filter.isProfane(playerName)) {
+            return res.status(400).json({ error: 'Inappropriate player name' });
+        }
+
+        // Update the leaderboard
+        const result = await leaderboard.updateOne(
+            { playerName, game },
+            {
+                $set: {
+                    playerName,
+                    game,
+                    maxScore,
+                    lastUpdated: new Date()
+                },
+                $max: { highScore: score } // Only update if the new score is higher
+            },
+            { upsert: true } // Create a new document if it doesn't exist
+        );
+
+        res.json({ message: 'Score saved successfully', result });
     } catch (error) {
-      console.error('Error saving score:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        console.error('Error saving score:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  });
+});
 
 // Get leaderboard for a specific game
 app.get('/api/leaderboard/:gameId', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const leaderboard = db.collection('leaderboard');
-  
-      const { gameId } = req.params;
-  
-      const topScores = await leaderboard
-        .find({ game: gameId })
-        .sort({ highScore: -1 })
-        .limit(10)
-        .toArray();
-  
-      res.json(topScores);
+        const { db } = await connectToDatabase();
+        const leaderboard = db.collection('leaderboard');
+
+        const { gameId } = req.params;
+
+        const topScores = await leaderboard
+            .find({ game: gameId })
+            .sort({ highScore: -1 })
+            .limit(10)
+            .toArray();
+
+        res.json(topScores);
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  });
+});
 
 // Save game result
 app.post('/api/saveGameResult', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const gameResultsCollection = db.collection('gameResults');
-      const userStatsCollection = db.collection('userStats');
-  
-      const result = await gameResultsCollection.insertOne({
-        ...req.body,
-        timestamp: new Date()
-      });
-  
-      // Update user statistics
-      await userStatsCollection.updateOne(
-        { playerName: req.body.playerName },
-        {
-          $inc: { totalScore: req.body.score, gamesPlayed: 1 },
-          $max: { highScore: req.body.score },
-          $set: { lastPlayed: new Date() }
-        },
-        { upsert: true }
-      );
-  
-      res.status(200).json({ message: 'Game result saved', id: result.insertedId });
+        const { db } = await connectToDatabase();
+        const gameResultsCollection = db.collection('gameResults');
+        const userStatsCollection = db.collection('userStats');
+
+        const result = await gameResultsCollection.insertOne({
+            ...req.body,
+            timestamp: new Date()
+        });
+
+        // Update user statistics
+        await userStatsCollection.updateOne(
+            { playerName: req.body.playerName },
+            {
+                $inc: { totalScore: req.body.score, gamesPlayed: 1 },
+                $max: { highScore: req.body.score },
+                $set: { lastPlayed: new Date() }
+            },
+            { upsert: true }
+        );
+
+        res.status(200).json({ message: 'Game result saved', id: result.insertedId });
     } catch (error) {
-      console.error('Error saving game result:', error);
-      res.status(500).json({ message: 'Error saving game result', error: error.message });
+        console.error('Error saving game result:', error);
+        res.status(500).json({ message: 'Error saving game result', error: error.message });
     }
-  });
-  
+});
+
 // Updated leaderboard endpoint to support multiple games
 app.get('/api/leaderboard', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const leaderboard = db.collection('leaderboard');
-  
-      const { game } = req.query; // Allow filtering by game
-  
-      let query = {};
-      if (game) {
-        query.game = game;
-      }
-  
-      const topScores = await leaderboard
-        .find(query)
-        .sort({ highScore: -1 })
-        .limit(10)
-        .toArray();
-  
-      res.status(200).json(topScores);
+        const { db } = await connectToDatabase();
+        const leaderboard = db.collection('leaderboard');
+
+        const { game } = req.query; // Allow filtering by game
+
+        let query = {};
+        if (game) {
+            query.game = game;
+        }
+
+        const topScores = await leaderboard
+            .find(query)
+            .sort({ highScore: -1 })
+            .limit(10)
+            .toArray();
+
+        res.status(200).json(topScores);
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
-      res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
     }
-  });
-  
-  // Get user statistics
-  app.get('/api/userStats/:playerName', async (req, res) => {
+});
+
+// Get user statistics
+app.get('/api/userStats/:playerName', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const userStatsCollection = db.collection('userStats');
-  
-      const stats = await userStatsCollection.findOne({ playerName: req.params.playerName });
-  
-      if (stats) {
-        res.status(200).json(stats);
-      } else {
-        res.status(404).json({ message: 'User not found' });
-      }
+        const { db } = await connectToDatabase();
+        const userStatsCollection = db.collection('userStats');
+
+        const stats = await userStatsCollection.findOne({ playerName: req.params.playerName });
+
+        if (stats) {
+            res.status(200).json(stats);
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
     } catch (error) {
-      console.error('Error fetching user stats:', error);
-      res.status(500).json({ message: 'Error fetching user stats', error: error.message });
+        console.error('Error fetching user stats:', error);
+        res.status(500).json({ message: 'Error fetching user stats', error: error.message });
     }
-  });
+});
 
 module.exports = app;
