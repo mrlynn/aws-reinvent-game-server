@@ -201,11 +201,11 @@ function cosineSimilarity(vecA, vecB) {
     return dotProduct / (magnitudeA * magnitudeB);
 }
 
-router.post('/saveScore', async (req, res) => {
+// Save score endpoint
+app.post('/api/saveScore', async (req, res) => {
     try {
-      await client.connect();
-      const database = client.db("gameDatabaseName"); // Replace with your actual database name
-      const leaderboard = database.collection("leaderboard");
+      const { db } = await connectToDatabase();
+      const leaderboard = db.collection('leaderboard');
   
       const { playerName, game, score, maxScore } = req.body;
   
@@ -233,17 +233,14 @@ router.post('/saveScore', async (req, res) => {
     } catch (error) {
       console.error('Error saving score:', error);
       res.status(500).json({ error: 'Internal server error' });
-    } finally {
-      await client.close();
     }
   });
 
-// Endpoint to get leaderboard for a specific game
-router.get('/leaderboard/:gameId', async (req, res) => {
+// Get leaderboard for a specific game
+app.get('/api/leaderboard/:gameId', async (req, res) => {
     try {
-      await client.connect();
-      const database = client.db("gameDatabaseName"); // Replace with your actual database name
-      const leaderboard = database.collection("leaderboard");
+      const { db } = await connectToDatabase();
+      const leaderboard = db.collection('leaderboard');
   
       const { gameId } = req.params;
   
@@ -257,8 +254,6 @@ router.get('/leaderboard/:gameId', async (req, res) => {
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
       res.status(500).json({ error: 'Internal server error' });
-    } finally {
-      await client.close();
     }
   });
 
@@ -292,18 +287,26 @@ app.post('/api/saveGameResult', async (req, res) => {
     }
   });
   
-  // Get leaderboard and implement multiple game leaderboard stats
-  app.get('/api/leaderboard', async (req, res) => {
+// Updated leaderboard endpoint to support multiple games
+app.get('/api/leaderboard', async (req, res) => {
     try {
       const { db } = await connectToDatabase();
-      const userStatsCollection = db.collection('userStats');
+      const leaderboard = db.collection('leaderboard');
   
-      const leaderboard = await userStatsCollection.find()
+      const { game } = req.query; // Allow filtering by game
+  
+      let query = {};
+      if (game) {
+        query.game = game;
+      }
+  
+      const topScores = await leaderboard
+        .find(query)
         .sort({ highScore: -1 })
         .limit(10)
         .toArray();
   
-      res.status(200).json(leaderboard);
+      res.status(200).json(topScores);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
       res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
