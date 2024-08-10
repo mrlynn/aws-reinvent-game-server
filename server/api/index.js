@@ -12,15 +12,47 @@ const filter = new Filter();
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
+app.use(updateUserActivity);
+
+setInterval(cleanupInactiveUsers, 60 * 1000);
+
+// In-memory storage for active users
+const activeUsers = new Map();
+
+// Function declarations
+function cleanupInactiveUsers() {
+  const now = Date.now();
+  for (const [userId, lastActive] of activeUsers) {
+    if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
+      activeUsers.delete(userId);
+    }
+  }
+}
+
+// Middleware to update user activity
+function updateUserActivity(req, res, next) {
+    const userId = req.headers['user-id'] || req.ip; // Use a user ID if provided, otherwise use IP
+    activeUsers.set(userId, Date.now());
+    next();
+  }
+
 const allowedOrigins = [
     'https://main.d1fueswraai8k7.amplifyapp.com',
     'http://localhost:3000', // For local development
     // Add any other origins you need
 ];
 
-
-// Run cleanup every minute
-setInterval(cleanupInactiveUsers, 60 * 1000);
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Middleware to update user activity
 app.use((req, res, next) => {
@@ -46,21 +78,6 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// In-memory storage for active users
-const activeUsers = new Map();
-
-// Function to cleanup inactive users
-const cleanupInactiveUsers = () => {
-    const now = Date.now();
-    for (const [userId, lastActive] of activeUsers) {
-        if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
-            activeUsers.delete(userId);
-        }
-    }
-};
-
-
-// Get active users count
 app.get('/api/activeUsers', (req, res) => {
     cleanupInactiveUsers(); // Run a cleanup before returning the count
     res.json({ activeUsers: activeUsers.size });
