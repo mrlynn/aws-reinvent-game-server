@@ -121,6 +121,7 @@ app.post('/api/checkDrawing', async (req, res) => {
             {
                 $project: {
                     description: 1,
+                    name: 1,
                     score: { $meta: "vectorSearchScore" }
                 }
             }
@@ -145,7 +146,8 @@ app.post('/api/checkDrawing', async (req, res) => {
             score: score,
             similarity: similarity,
             explanation: `Drawing labels: ${labels.join(', ')}`,
-            promptText: prompt.description
+            promptText: prompt.description,
+            promptName: prompt.name
         };
 
         console.log('Sending response:', response);
