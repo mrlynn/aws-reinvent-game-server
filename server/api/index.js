@@ -16,6 +16,35 @@ const allowedOrigins = [
     // Add any other origins you need
 ];
 
+// In-memory storage for active users
+const activeUsers = new Map();
+
+// Function to cleanup inactive users
+const cleanupInactiveUsers = () => {
+    const now = Date.now();
+    for (const [userId, lastActive] of activeUsers) {
+      if (now - lastActive > 5 * 60 * 1000) { // Remove users inactive for more than 5 minutes
+        activeUsers.delete(userId);
+      }
+    }
+  };
+
+  // Run cleanup every minute
+setInterval(cleanupInactiveUsers, 60 * 1000);
+
+// Middleware to update user activity
+app.use((req, res, next) => {
+    const userId = req.headers['user-id'] || req.ip; // Use a user ID if provided, otherwise use IP
+    activeUsers.set(userId, Date.now());
+    next();
+  });
+
+// Get active users count
+app.get('/api/activeUsers', (req, res) => {
+    cleanupInactiveUsers(); // Run a cleanup before returning the count
+    res.json({ activeUsers: activeUsers.size });
+  });
+
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
