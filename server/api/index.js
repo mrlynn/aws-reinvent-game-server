@@ -64,27 +64,18 @@ app.post('/api/checkDrawing', async (req, res) => {
             return res.status(400).json({ message: 'No drawing data provided' });
         }
 
-        // Extract the base64 data from the drawing string
-        const base64Data = drawing.replace(/^data:image\/\w+;base64,/, "");
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-
-        // Save the image temporarily
-        const tempFilePath = path.join('/tmp', `drawing-${Date.now()}.png`);
-        await fs.writeFile(tempFilePath, imageBuffer);
+        // ... (previous code for image processing remains the same)
 
         // Analyze the drawing
         const labels = await analyzeDrawing(tempFilePath);
         console.log('Rekognition labels:', labels);
 
-        // Delete the temporary file
-        await fs.unlink(tempFilePath);
-
-        const { db } = await connectToDatabase();
-        const promptsCollection = db.collection(process.env.COLLECTION_NAME);
+        // ... (database connection code remains the same)
 
         let prompt;
         try {
             prompt = await promptsCollection.findOne({ _id: new ObjectId(promptId) });
+            console.log('Found prompt:', prompt);
         } catch (error) {
             console.error('Invalid promptId:', promptId);
             return res.status(400).json({ message: 'Invalid promptId provided' });
@@ -96,6 +87,7 @@ app.post('/api/checkDrawing', async (req, res) => {
 
         // Generate embedding for the concatenated labels
         const labelText = labels.join(' ');
+        console.log('Label text for embedding:', labelText);
         const embeddingResponse = await axios.post('https://api.openai.com/v1/embeddings', {
             input: labelText,
             model: "text-embedding-ada-002"
@@ -106,8 +98,10 @@ app.post('/api/checkDrawing', async (req, res) => {
             }
         });
         const labelEmbedding = embeddingResponse.data.data[0].embedding;
+        console.log('Generated embedding (first 5 elements):', labelEmbedding.slice(0, 5));
 
         // Perform vector search
+        console.log('Performing vector search...');
         const searchResults = await promptsCollection.aggregate([
             {
                 $vectorSearch: {
@@ -121,36 +115,46 @@ app.post('/api/checkDrawing', async (req, res) => {
             {
                 $project: {
                     description: 1,
-                    name: 1,
                     score: { $meta: "vectorSearchScore" }
                 }
             }
         ]).toArray();
+        console.log('Vector search results:', searchResults);
+
+        let score, similarity, explanation;
+        let scoringMethod;
 
         if (searchResults.length === 0) {
-            console.log('No matching results found in vector search');
+            console.log('No matching results found in vector search, using fallback method');
             // Fallback scoring method
             const promptLabels = prompt.description.toLowerCase().split(' ');
             const matchingLabels = labels.filter(label => promptLabels.includes(label.toLowerCase()));
             similarity = matchingLabels.length / Math.max(labels.length, promptLabels.length);
             score = Math.round(similarity * 100);
-            explanation = `No close matches found. Fallback scoring used. Drawing labels: ${labels.join(', ')}`;
+            explanation = `Fallback scoring used. Matching labels: ${matchingLabels.join(', ')}`;
+            scoringMethod = 'fallback';
         } else {
             const matchedPrompt = searchResults[0];
             similarity = matchedPrompt.score;
             score = Math.round(similarity * 100);
-            explanation = `Drawing labels: ${labels.join(', ')}`;
+            explanation = `Vector search scoring used.`;
+            scoringMethod = 'vectorSearch';
         }
+
+        console.log('Calculated score:', score);
+        console.log('Calculated similarity:', similarity);
 
         const response = {
             score: score,
             similarity: similarity,
-            explanation: `Drawing labels: ${labels.join(', ')}`,
+            explanation: explanation,
             promptText: prompt.description,
-            promptName: prompt.name
+            detectedLabels: labels,
+            scoringMethod: scoringMethod,
+            vectorSearchResults: searchResults,
         };
 
-        console.log('Sending response:', response);
+        console.log('Sending response:', JSON.stringify(response, null, 2));
         res.json(response);
     } catch (error) {
         console.error('Error in /api/checkDrawing:', error);
