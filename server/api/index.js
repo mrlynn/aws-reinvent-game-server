@@ -201,4 +201,71 @@ function cosineSimilarity(vecA, vecB) {
     return dotProduct / (magnitudeA * magnitudeB);
 }
 
+// Save game result
+app.post('/api/saveGameResult', async (req, res) => {
+    try {
+      const { db } = await connectToDatabase();
+      const gameResultsCollection = db.collection('gameResults');
+      const userStatsCollection = db.collection('userStats');
+  
+      const result = await gameResultsCollection.insertOne({
+        ...req.body,
+        timestamp: new Date()
+      });
+  
+      // Update user statistics
+      await userStatsCollection.updateOne(
+        { playerName: req.body.playerName },
+        {
+          $inc: { totalScore: req.body.score, gamesPlayed: 1 },
+          $max: { highScore: req.body.score },
+          $set: { lastPlayed: new Date() }
+        },
+        { upsert: true }
+      );
+  
+      res.status(200).json({ message: 'Game result saved', id: result.insertedId });
+    } catch (error) {
+      console.error('Error saving game result:', error);
+      res.status(500).json({ message: 'Error saving game result', error: error.message });
+    }
+  });
+  
+  // Get leaderboard
+  app.get('/api/leaderboard', async (req, res) => {
+    try {
+      const { db } = await connectToDatabase();
+      const userStatsCollection = db.collection('userStats');
+  
+      const leaderboard = await userStatsCollection.find()
+        .sort({ highScore: -1 })
+        .limit(10)
+        .toArray();
+  
+      res.status(200).json(leaderboard);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
+    }
+  });
+  
+  // Get user statistics
+  app.get('/api/userStats/:playerName', async (req, res) => {
+    try {
+      const { db } = await connectToDatabase();
+      const userStatsCollection = db.collection('userStats');
+  
+      const stats = await userStatsCollection.findOne({ playerName: req.params.playerName });
+  
+      if (stats) {
+        res.status(200).json(stats);
+      } else {
+        res.status(404).json({ message: 'User not found' });
+      }
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      res.status(500).json({ message: 'Error fetching user stats', error: error.message });
+    }
+  });
+
 module.exports = app;
