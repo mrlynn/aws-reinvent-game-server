@@ -140,7 +140,7 @@ app.post('/api/checkDrawing', async (req, res) => {
 
         const labels = analysisResult.labels || [];
         console.log('Rekognition labels:', labels);
-        
+
         const { db } = await connectToDatabase();
         const promptsCollection = db.collection(process.env.COLLECTION_NAME);
 
@@ -265,42 +265,48 @@ function cosineSimilarity(vecA, vecB) {
 
 // Save score endpoint
 app.post('/api/saveScore', async (req, res) => {
-    try {
-        const { db } = await connectToDatabase();
-        const leaderboard = db.collection('leaderboard');
+  try {
+    const { db } = await connectToDatabase();
+    const leaderboard = db.collection('leaderboard');
 
-        const { playerName, game, score, maxScore } = req.body;
+    const { playerName, game, score, maxScore } = req.body;
 
-        // Validate input
-        if (!playerName || !game || typeof score !== 'number' || typeof maxScore !== 'number') {
-            return res.status(400).json({ error: 'Invalid input' });
-        }
+    console.log('Received score data:', { playerName, game, score, maxScore });
 
-        // Check for profanity in player name
-        if (filter.isProfane(playerName)) {
-            return res.status(400).json({ error: 'Inappropriate player name' });
-        }
-
-        // Update the leaderboard
-        const result = await leaderboard.updateOne(
-            { playerName, game },
-            {
-                $set: {
-                    playerName,
-                    game,
-                    maxScore,
-                    lastUpdated: new Date()
-                },
-                $max: { highScore: score } // Only update if the new score is higher
-            },
-            { upsert: true } // Create a new document if it doesn't exist
-        );
-
-        res.json({ message: 'Score saved successfully', result });
-    } catch (error) {
-        console.error('Error saving score:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    // Validate input
+    if (!playerName || typeof playerName !== 'string') {
+      return res.status(400).json({ error: 'Invalid playerName' });
     }
+    if (!game || typeof game !== 'string') {
+      return res.status(400).json({ error: 'Invalid game' });
+    }
+    if (typeof score !== 'number' || isNaN(score)) {
+      return res.status(400).json({ error: 'Invalid score' });
+    }
+    if (typeof maxScore !== 'number' || isNaN(maxScore)) {
+      return res.status(400).json({ error: 'Invalid maxScore' });
+    }
+
+    // Update the leaderboard
+    const result = await leaderboard.updateOne(
+      { playerName, game },
+      { 
+        $set: { 
+          playerName, 
+          game, 
+          maxScore,
+          lastUpdated: new Date()
+        },
+        $max: { highScore: score } // Only update if the new score is higher
+      },
+      { upsert: true } // Create a new document if it doesn't exist
+    );
+
+    res.status(200).json({ message: 'Score saved successfully', result });
+  } catch (error) {
+    console.error('Error saving score:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
 });
 
 // Get leaderboard for a specific game
