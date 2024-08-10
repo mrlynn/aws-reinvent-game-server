@@ -29,21 +29,18 @@ app.use((req, res, next) => {
     next();
 });
 
-const allowedOrigins = [
-    'https://main.d1fueswraai8k7.amplifyapp.com',
-    'http://localhost:3000', // For local development
-    // Add any other origins you need
-];
+// Assuming allowedOrigins is already declared, let's add the new origin
+if (!allowedOrigins.includes('https://main.d1fueswraai8k7.amplifyapp.com')) {
+    allowedOrigins.push('https://main.d1fueswraai8k7.amplifyapp.com');
+}
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
         }
-        return callback(null, true);
     },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
