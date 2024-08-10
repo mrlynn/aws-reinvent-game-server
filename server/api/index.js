@@ -128,12 +128,18 @@ app.post('/api/checkDrawing', async (req, res) => {
 
         if (searchResults.length === 0) {
             console.log('No matching results found in vector search');
-            return res.status(404).json({ message: 'No matching results found' });
+            // Fallback scoring method
+            const promptLabels = prompt.description.toLowerCase().split(' ');
+            const matchingLabels = labels.filter(label => promptLabels.includes(label.toLowerCase()));
+            similarity = matchingLabels.length / Math.max(labels.length, promptLabels.length);
+            score = Math.round(similarity * 100);
+            explanation = `No close matches found. Fallback scoring used. Drawing labels: ${labels.join(', ')}`;
+        } else {
+            const matchedPrompt = searchResults[0];
+            similarity = matchedPrompt.score;
+            score = Math.round(similarity * 100);
+            explanation = `Drawing labels: ${labels.join(', ')}`;
         }
-
-        const matchedPrompt = searchResults[0];
-        const similarity = matchedPrompt.score;
-        const score = Math.round(similarity * 100);
 
         const response = {
             score: score,
