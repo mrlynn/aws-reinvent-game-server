@@ -28,21 +28,30 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+
+
 app.get('/api/getRandomPrompt', async (req, res) => {
     try {
-      const { db } = await connectToDatabase();
-      const promptsCollection = db.collection(process.env.COLLECTION_NAME);
-      const [randomPrompt] = await promptsCollection.aggregate([{ $sample: { size: 1 } }]).toArray();
-      if (randomPrompt) {
-        res.json({ promptId: randomPrompt._id.toString(), description: randomPrompt.description });
-      } else {
-        res.status(404).json({ message: 'No prompts found' });
-      }
+        const { db } = await connectToDatabase();
+        const promptsCollection = db.collection(process.env.COLLECTION_NAME);
+
+        const prompts = await promptsCollection.aggregate([{ $sample: { size: 1 } }]).toArray();
+
+        if (prompts.length === 0) {
+            return res.status(404).json({ message: 'No prompts available' });
+        }
+
+        const randomPrompt = prompts[0];
+        res.json({
+            promptId: randomPrompt._id.toString(),
+            text: randomPrompt.name,
+            description: randomPrompt.description
+        });
     } catch (error) {
-      console.error('Error getting random prompt:', error);
-      res.status(500).json({ message: 'Error getting random prompt', error: error.message });
+        console.error('Error fetching random prompt:', error);
+        res.status(500).json({ message: 'Error fetching random prompt', error: error.message });
     }
-  });
+});
 
 app.post('/api/checkDrawing', async (req, res) => {
     console.log('Received request to /api/checkDrawing');
