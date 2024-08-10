@@ -93,6 +93,7 @@ app.post('/api/checkDrawing', async (req, res) => {
             return res.status(400).json({ message: 'No drawing data provided' });
         }
 
+
         // Extract the base64 data from the drawing string
         const base64Data = drawing.replace(/^data:image\/\w+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, 'base64');
@@ -104,6 +105,23 @@ app.post('/api/checkDrawing', async (req, res) => {
         // Analyze the drawing
         const labels = await analyzeDrawing(tempFilePath);
         console.log('Rekognition labels:', labels);
+
+        // Content moderation check
+        const moderationParams = {
+            Image: {
+                Bytes: imageBuffer
+            },
+            MinConfidence: 60
+        };
+        
+        const moderationResult = await rekognition.detectModerationLabels(moderationParams).promise();
+        
+        if (moderationResult.ModerationLabels.length > 0) {
+            return res.status(400).json({ 
+                message: 'The drawing contains inappropriate content and cannot be submitted.',
+                moderationLabels: moderationResult.ModerationLabels
+            });
+        }
 
         // Delete the temporary file
         await fs.unlink(tempFilePath);
