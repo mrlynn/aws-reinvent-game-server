@@ -39,11 +39,7 @@ app.use((req, res, next) => {
     next();
   });
 
-// Get active users count
-app.get('/api/activeUsers', (req, res) => {
-    cleanupInactiveUsers(); // Run a cleanup before returning the count
-    res.json({ activeUsers: activeUsers.size });
-  });
+
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -57,7 +53,11 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-
+// Get active users count
+app.get('/api/activeUsers', (req, res) => {
+    cleanupInactiveUsers(); // Run a cleanup before returning the count
+    res.json({ activeUsers: activeUsers.size });
+  });
 
 app.get('/api/getRandomPrompt', async (req, res) => {
     try {
