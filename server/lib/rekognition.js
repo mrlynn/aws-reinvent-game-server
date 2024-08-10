@@ -10,48 +10,47 @@ const rekognitionClient = new RekognitionClient({
 });
 
 async function detectLabels(imageBuffer) {
-  const params = {
-    Image: {
-      Bytes: imageBuffer
-    },
-    MaxLabels: 10,
-    MinConfidence: 75,
-  };
-  const command = new DetectLabelsCommand(params);
-  try {
-    const rekognitionResponse = await rekognitionClient.send(command);
-    return rekognitionResponse.Labels.map(label => label.Name);
-  } catch (error) {
-    console.error('Error in Rekognition label detection:', error);
-    throw error;
+    const params = {
+      Image: {
+        Bytes: imageBuffer
+      },
+      MaxLabels: 10,
+      MinConfidence: 75,
+    };
+    const command = new DetectLabelsCommand(params);
+    try {
+      const rekognitionResponse = await rekognitionClient.send(command);
+      return rekognitionResponse.Labels.map(label => label.Name);
+    } catch (error) {
+      console.error('Error in Rekognition label detection:', error);
+      return [];
+    }
   }
-}
 
-async function moderateContent(imageBuffer) {
-  const params = {
-    Image: {
-      Bytes: imageBuffer
-    },
-    MinConfidence: 60
-  };
-  const command = new DetectModerationLabelsCommand(params);
-  try {
-    const moderationResponse = await rekognitionClient.send(command);
-    return moderationResponse.ModerationLabels;
-  } catch (error) {
-    console.error('Error in Rekognition content moderation:', error);
-    throw error;
+  async function moderateContent(imageBuffer) {
+    const params = {
+      Image: {
+        Bytes: imageBuffer
+      },
+      MinConfidence: 60
+    };
+    const command = new DetectModerationLabelsCommand(params);
+    try {
+      const moderationResponse = await rekognitionClient.send(command);
+      return moderationResponse.ModerationLabels;
+    } catch (error) {
+      console.error('Error in Rekognition content moderation:', error);
+      return [];
+    }
   }
-}
 
 async function analyzeDrawing(imagePath) {
   const imageBuffer = await fs.readFile(imagePath);
   
   // Perform content moderation
   const moderationLabels = await moderateContent(imageBuffer);
-  if (moderationLabels.length > 0) {
-    throw new Error('Inappropriate content detected');
-  }
+  const isAppropriate = moderationLabels.length === 0;
+
 
   // If content is appropriate, detect labels
   const labels = await detectLabels(imageBuffer);
