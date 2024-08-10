@@ -422,4 +422,70 @@ app.get('/api/userStats/:playerName', async (req, res) => {
     }
 });
 
+// Start Treasure Hunt game
+app.post('/api/startTreasureHunt', async (req, res) => {
+    try {
+        const { playerName } = req.body;
+        // You might want to initialize player session or game state here
+        res.json({ message: 'Treasure Hunt game started', playerName });
+    } catch (error) {
+        console.error('Error starting Treasure Hunt game:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get Treasure Hunt clue
+app.get('/api/getTreasureClue', async (req, res) => {
+    try {
+        const { db } = await connectToDatabase();
+        const cluesCollection = db.collection('treasureHuntClues');
+
+        const clue = await cluesCollection.aggregate([{ $sample: { size: 1 } }]).next();
+
+        if (!clue) {
+            return res.status(404).json({ message: 'No clues available' });
+        }
+
+        res.json({
+            clue: {
+                id: clue._id.toString(),
+                clue: clue.clue
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching Treasure Hunt clue:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Submit Treasure Hunt answer
+app.post('/api/submitTreasureAnswer', async (req, res) => {
+    try {
+        const { clueId, answer } = req.body;
+        const { db } = await connectToDatabase();
+        const cluesCollection = db.collection('treasureHuntClues');
+
+        const clue = await cluesCollection.findOne({ _id: new ObjectId(clueId) });
+
+        if (!clue) {
+            return res.status(404).json({ message: 'Clue not found' });
+        }
+
+        // Compare answer, you might want to use a more sophisticated comparison
+        const isCorrect = answer.toLowerCase().trim() === clue.answer.toLowerCase().trim();
+
+        // Calculate score based on correctness and potentially other factors
+        const score = isCorrect ? 100 : 0; // Simplified scoring
+
+        res.json({
+            correct: isCorrect,
+            score: score,
+            correctAnswer: clue.answer
+        });
+    } catch (error) {
+        console.error('Error submitting Treasure Hunt answer:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = app;
