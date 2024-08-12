@@ -46,6 +46,7 @@ const allowedOrigins = [
     'https://main.d1fueswraai8k7.amplifyapp.com',
     'http://localhost:3000',
     'http://localhost:5000',
+    'https://aws-reinvent-ai-game.vercel.app/',
     apiUrl,
     // Add any other origins you need
 ];
