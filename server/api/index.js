@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const Filter = require('bad-words');
 const filter = new Filter();
+const { Vector } = require('onnxruntime-node');
 
 // Define API URL based on environment
 const apiUrl = process.env.NODE_ENV === 'production' 
@@ -19,6 +20,152 @@ console.log("Api Url: ", apiUrl)
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(updateUserActivity);
+
+// AI Hunter specific game state
+const aiHunterGameState = {
+    players: {},
+    aiEntities: [],
+    gameMap: {
+      width: 1000,
+      height: 1000,
+      obstacles: [
+        { x: 100, y: 100, width: 50, height: 50 },
+        { x: 500, y: 500, width: 100, height: 100 },
+      ]
+    }
+  };
+
+  // AI Hunter behavior types
+const aiHunterBehaviorTypes = {
+    AGGRESSIVE: 'aggressive',
+    DEFENSIVE: 'defensive',
+    EVASIVE: 'evasive'
+  };
+
+  // AI Hunter specific functions
+function aiHunterInitializeGameMap() {
+    aiHunterGameState.gameMap = {
+      width: 1000,
+      height: 1000,
+      obstacles: [
+        { x: 100, y: 100, width: 50, height: 50 },
+        { x: 500, y: 500, width: 100, height: 100 },
+      ]
+    };
+  }
+
+  function aiHunterCreateAIEntity(id, x, y) {
+    return {
+      id,
+      x,
+      y,
+      health: 100,
+      behavior: aiHunterGetRandomBehavior(),
+      vector: aiHunterGenerateRandomVector()
+    };
+  }
+
+  function aiHunterGetRandomBehavior() {
+    const behaviors = Object.values(aiHunterBehaviorTypes);
+    return behaviors[Math.floor(Math.random() * behaviors.length)];
+  }
+  
+  function aiHunterGenerateRandomVector() {
+    return Array.from({length: 10}, () => Math.random());
+  }
+
+  function aiHunterFindNearestPlayer(entity, players) {
+    let nearestPlayer = null;
+    let shortestDistance = Infinity;
+  
+    for (const playerId in players) {
+      const player = players[playerId];
+      const distance = Math.sqrt(
+        Math.pow(entity.x - player.x, 2) + Math.pow(entity.y - player.y, 2)
+      );
+  
+      if (distance < shortestDistance) {
+        shortestDistance = distance;
+        nearestPlayer = player;
+      }
+    }
+  
+    return nearestPlayer;
+  }
+
+  function aiHunterMoveTowardsPlayer(entity, player) {
+    if (!player) return;
+  
+    const speed = 2;
+    const dx = player.x - entity.x;
+    const dy = player.y - entity.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+  
+    if (distance > 0) {
+      entity.x += (dx / distance) * speed;
+      entity.y += (dy / distance) * speed;
+    }
+  }
+  function aiHunterMoveAwayFromPlayer(entity, player) {
+    if (!player) return;
+  
+    const speed = 2;
+    const dx = entity.x - player.x;
+    const dy = entity.y - player.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+  
+    if (distance > 0) {
+      entity.x += (dx / distance) * speed;
+      entity.y += (dy / distance) * speed;
+    }
+  }
+  
+  function aiHunterUpdateAIEntity(entity, players) {
+    const nearestPlayer = aiHunterFindNearestPlayer(entity, players);
+    
+    switch(entity.behavior) {
+      case aiHunterBehaviorTypes.AGGRESSIVE:
+        aiHunterMoveTowardsPlayer(entity, nearestPlayer);
+        break;
+      case aiHunterBehaviorTypes.DEFENSIVE:
+        aiHunterMoveAwayFromPlayer(entity, nearestPlayer);
+        break;
+      case aiHunterBehaviorTypes.EVASIVE:
+        aiHunterMoveRandomly(entity);
+        break;
+    }
+  }
+
+  function aiHunterMoveRandomly(entity) {
+    entity.x += Math.random() * 10 - 5;
+    entity.y += Math.random() * 10 - 5;
+    
+    // Ensure entity stays within map bounds
+    entity.x = Math.max(0, Math.min(entity.x, aiHunterGameState.gameMap.width));
+    entity.y = Math.max(0, Math.min(entity.y, aiHunterGameState.gameMap.height));
+  }
+
+  function aiHunterGameLoop() {
+    for (let entity of aiHunterGameState.aiEntities) {
+      aiHunterUpdateAIEntity(entity, aiHunterGameState.players);
+    }
+    
+    // In a real implementation, we would also update player states, check for collisions, etc.
+  }
+
+  async function aiHunterInitializeGame() {
+    aiHunterInitializeGameMap();
+    
+    // Create some initial AI entities
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * aiHunterGameState.gameMap.width;
+      const y = Math.random() * aiHunterGameState.gameMap.height;
+      aiHunterGameState.aiEntities.push(aiHunterCreateAIEntity(i, x, y));
+    }
+    
+    // Start the game loop
+    setInterval(aiHunterGameLoop, 100); // Run 10 times per second
+  }
 
 setInterval(cleanupInactiveUsers, 60 * 1000);
 
@@ -362,26 +509,47 @@ app.get('/api/leaderboard/:gameId', async (req, res) => {
     }
 });
 
-// Save game result
+// Modify existing saveGameResult endpoint to handle AI Hunter specific data
 app.post('/api/saveGameResult', async (req, res) => {
     try {
         const { db } = await connectToDatabase();
         const gameResultsCollection = db.collection('gameResults');
         const userStatsCollection = db.collection('userStats');
 
-        const result = await gameResultsCollection.insertOne({
+        let gameResult = {
             ...req.body,
             timestamp: new Date()
-        });
+        };
+
+        // AI Hunter specific data
+        if (req.body.game === 'aiHunter') {
+            gameResult = {
+                ...gameResult,
+                aiEntitiesDefeated: req.body.aiEntitiesDefeated || 0,
+                timeAlive: req.body.timeAlive || 0,
+            };
+        }
+
+        const result = await gameResultsCollection.insertOne(gameResult);
 
         // Update user statistics
+        const updateQuery = {
+            $inc: { 
+                totalScore: req.body.score, 
+                gamesPlayed: 1,
+            },
+            $max: { highScore: req.body.score },
+            $set: { lastPlayed: new Date() }
+        };
+
+        // AI Hunter specific stats
+        if (req.body.game === 'aiHunter') {
+            updateQuery.$inc.totalAiEntitiesDefeated = req.body.aiEntitiesDefeated || 0;
+        }
+
         await userStatsCollection.updateOne(
             { playerName: req.body.playerName },
-            {
-                $inc: { totalScore: req.body.score, gamesPlayed: 1 },
-                $max: { highScore: req.body.score },
-                $set: { lastPlayed: new Date() }
-            },
+            updateQuery,
             { upsert: true }
         );
 
@@ -474,6 +642,46 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
+aiHunterInitializeGame();
 
+// AI Hunter specific endpoints
+app.get('/api/aiHunter/gameState', (req, res) => {
+    res.json(aiHunterGameState);
+  });
+
+  app.post('/api/aiHunter/updatePlayer', (req, res) => {
+    const { playerId, x, y } = req.body;
+    if (!aiHunterGameState.players[playerId]) {
+      aiHunterGameState.players[playerId] = { x, y, health: 100 };
+    } else {
+      aiHunterGameState.players[playerId].x = x;
+      aiHunterGameState.players[playerId].y = y;
+    }
+    res.json({ success: true });
+  });
+
+  app.post('/api/aiHunter/vectorSearch', async (req, res) => {
+    try {
+      const { vector } = req.body;
+      const { db } = await connectToDatabase();
+      const collection = db.collection('aiHunter_game_elements');
+      
+      const result = await collection.find({
+        vector: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: vector
+            }
+          }
+        }
+      }).limit(5).toArray();
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error in AI Hunter vector search:', error);
+      res.status(500).json({ message: 'Error performing AI Hunter vector search', error: error.message });
+    }
+  });
 
 module.exports = app;
