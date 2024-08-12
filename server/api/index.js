@@ -73,7 +73,9 @@ app.use((req, res, next) => {
 if (!allowedOrigins.includes('https://main.d1fueswraai8k7.amplifyapp.com')) {
     allowedOrigins.push('https://main.d1fueswraai8k7.amplifyapp.com');
 }
-
+if (!allowedOrigins.includes('https://aws-reinvent-ai-game.vercel.app/')) {
+    allowedOrigins.push('https://aws-reinvent-ai-game.vercel.app/');
+}
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
