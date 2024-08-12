@@ -1,7 +1,8 @@
+require('dotenv').config({ path: '../.env' });
 const express = require('express');
 const { ObjectId } = require('mongodb');
 const axios = require('axios');
-const connectToDatabase = require('../lib/database').default;
+const connectToDatabase = require('../lib/database');
 const analyzeDrawing = require('../lib/rekognition');
 const cors = require('cors');
 const path = require('path');
@@ -9,6 +10,12 @@ const fs = require('fs').promises;
 const Filter = require('bad-words');
 const filter = new Filter();
 
+// Define API URL based on environment
+const apiUrl = process.env.NODE_ENV === 'production' 
+  ? process.env.PROD_API_URL 
+  : process.env.DEV_API_URL;
+
+console.log("Api Url: ", apiUrl)
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(updateUserActivity);
@@ -37,7 +44,9 @@ function updateUserActivity(req, res, next) {
 
 const allowedOrigins = [
     'https://main.d1fueswraai8k7.amplifyapp.com',
-    'http://localhost:3000', // For local development
+    'http://localhost:3000',
+    'http://localhost:5000',
+    apiUrl,
     // Add any other origins you need
 ];
 
@@ -49,7 +58,7 @@ app.use(cors({
             callback(new Error('Not allowed by CORS'));
         }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -73,7 +82,7 @@ app.use(cors({
             callback(new Error('Not allowed by CORS'));
         }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -116,7 +125,6 @@ app.post('/api/checkDrawing', async (req, res) => {
             return res.status(400).json({ message: 'No drawing data provided' });
         }
 
-
         // Extract the base64 data from the drawing string
         const base64Data = drawing.replace(/^data:image\/\w+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, 'base64');
@@ -128,7 +136,6 @@ app.post('/api/checkDrawing', async (req, res) => {
         // Analyze the drawing
         const analysisResult = await analyzeDrawing(tempFilePath);
         console.log('Rekognition analysis result:', analysisResult);
-
 
         // Delete the temporary file
         await fs.unlink(tempFilePath);
@@ -420,5 +427,44 @@ app.get('/api/userStats/:playerName', async (req, res) => {
         res.status(500).json({ message: 'Error fetching user stats', error: error.message });
     }
 });
+
+// Delete a player from the leaderboard
+app.delete('/api/leaderboard/:gameId/:playerId', async (req, res) => {
+    try {
+        const { db } = await connectToDatabase();
+        const leaderboard = db.collection('leaderboard');
+
+        const { gameId, playerId } = req.params;
+
+        // Validate ObjectId
+        if (!ObjectId.isValid(playerId)) {
+            return res.status(400).json({ error: 'Invalid playerId' });
+        }
+
+        // Attempt to delete the player from the leaderboard
+        const result = await leaderboard.deleteOne({
+            _id: new ObjectId(playerId),
+            game: gameId
+        });
+
+        if (result.deletedCount === 1) {
+            res.status(200).json({ message: 'Player removed from leaderboard' });
+        } else {
+            res.status(404).json({ error: 'Player not found on the leaderboard' });
+        }
+    } catch (error) {
+        console.error('Error removing player from leaderboard:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+
 
 module.exports = app;

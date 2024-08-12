@@ -1,64 +1,80 @@
 const { RekognitionClient, DetectLabelsCommand, DetectModerationLabelsCommand } = require('@aws-sdk/client-rekognition');
+const { defaultProvider } = require('@aws-sdk/credential-provider-node');
 const fs = require('fs').promises;
+require('dotenv').config({ path: '../.env' });
 
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
+// console.log('AWS_REGION:', process.env.AWS_REGION);
+// console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
+// console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Not set');
+// console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID);
+// console.log('AWS_SECRET_ACCESS_KEY',process.env.AWS_SECRET_ACCESS_KEY )
+
+const rekognition = new RekognitionClient({
+    region: 'us-east-1',
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      logger: console,
+    },
 });
 
-async function detectLabels(imageBuffer) {
-    const params = {
-      Image: {
-        Bytes: imageBuffer
-      },
-      MaxLabels: 10,
-      MinConfidence: 75,
-    };
-    const command = new DetectLabelsCommand(params);
-    try {
-      const rekognitionResponse = await rekognitionClient.send(command);
-      return rekognitionResponse.Labels.map(label => label.Name);
-    } catch (error) {
-      console.error('Error in Rekognition label detection:', error);
-      return [];
-    }
-  }
+// const rekognition = new RekognitionClient({
+//     region: process.env.AWS_REGION || 'us-east-1',
+//     credentials: defaultProvider(),
+//     logger: console,
+// });
 
-  async function moderateContent(imageBuffer) {
-    const params = {
-      Image: {
-        Bytes: imageBuffer
-      },
-      MinConfidence: 60
-    };
-    const command = new DetectModerationLabelsCommand(params);
+async function detectLabels(imagePath) {
     try {
-      const moderationResponse = await rekognitionClient.send(command);
-      return moderationResponse.ModerationLabels;
+        const imageData = await fs.readFile(imagePath);
+        const params = {
+            Image: {
+                Bytes: imageData
+            },
+            MaxLabels: 10,
+            MinConfidence: 70
+        };
+
+        const command = new DetectLabelsCommand(params);
+        const data = await rekognition.send(command);
+        return data.Labels.map(label => label.Name);
     } catch (error) {
-      console.error('Error in Rekognition content moderation:', error);
-      return [];
+        console.error('Error in Rekognition label detection:', error);
+        throw error;
     }
-  }
+}
+
+async function moderateContent(imagePath) {
+    try {
+        const imageData = await fs.readFile(imagePath);
+        const params = {
+            Image: {
+                Bytes: imageData
+            },
+            MinConfidence: 60
+        };
+
+        const command = new DetectModerationLabelsCommand(params);
+        const data = await rekognition.send(command);
+        return data.ModerationLabels.length === 0;
+    } catch (error) {
+        console.error('Error in Rekognition content moderation:', error);
+        throw error;
+    }
+}
 
 async function analyzeDrawing(imagePath) {
-  const imageBuffer = await fs.readFile(imagePath);
-  
-  // Perform content moderation
-  const moderationLabels = await moderateContent(imageBuffer);
-  const isAppropriate = moderationLabels.length === 0;
-
-
-  // If content is appropriate, detect labels
-  const labels = await detectLabels(imageBuffer);
-  
-  return {
-    labels: labels,
-    isAppropriate: true
-  };
+    try {
+        const [labels, isAppropriate] = await Promise.all([
+            detectLabels(imagePath),
+            moderateContent(imagePath)
+        ]);
+        return { labels, isAppropriate };
+    } catch (error) {
+        console.error('Error analyzing drawing:', error);
+        // Return a default result in case of error
+        return { labels: [], isAppropriate: true };
+    }
 }
 
 module.exports = analyzeDrawing;
