@@ -46,21 +46,33 @@ const allowedOrigins = [
     'https://main.d1fueswraai8k7.amplifyapp.com',
     'http://localhost:3000',
     'http://localhost:5000',
-    'https://aws-reinvent-ai-game.vercel.app/',
-    apiUrl,
-    // Add any other origins you need
+    'https://aws-reinvent-ai-game.vercel.app',
+    process.env.PROD_API_URL,
+    process.env.DEV_API_URL,
 ];
 
+// Assuming allowedOrigins is already declared, let's add the new origin
+if (!allowedOrigins.includes('https://main.d1fueswraai8k7.amplifyapp.com')) {
+    allowedOrigins.push('https://main.d1fueswraai8k7.amplifyapp.com');
+}
+if (!allowedOrigins.includes('https://aws-reinvent-ai-game.vercel.app/')) {
+    allowedOrigins.push('https://aws-reinvent-ai-game.vercel.app/');
+}
+
+// CORS middleware configuration
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
         }
+        return callback(null, true);
     },
-    methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true // Enable CORS credentials
 }));
 
 // Middleware to update user activity
@@ -70,13 +82,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Assuming allowedOrigins is already declared, let's add the new origin
-if (!allowedOrigins.includes('https://main.d1fueswraai8k7.amplifyapp.com')) {
-    allowedOrigins.push('https://main.d1fueswraai8k7.amplifyapp.com');
-}
-if (!allowedOrigins.includes('https://aws-reinvent-ai-game.vercel.app/')) {
-    allowedOrigins.push('https://aws-reinvent-ai-game.vercel.app/');
-}
+
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
